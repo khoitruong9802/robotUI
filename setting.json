@@ -1,0 +1,7 @@
+{
+    "mqttUsername": "internKhoi",
+    "mqttPassword": "123456",
+    "confidenScoreConfirm": "80",
+    "timesConfirm": "5",
+    "autoLoadModel": "chuachay"
+}

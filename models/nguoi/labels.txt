@@ -1,0 +1,2 @@
+0 nguoi
+1 khong co nguoi

@@ -1,0 +1,7 @@
+0 Nothing
+1 LuaNho
+2 LuaVua
+3 LuaLon
+4 QuatGio
+5 BinhThuong
+6 Rule
