@@ -1,7 +1,1 @@
-{
-    "mqttUsername": "internKhoi",
-    "mqttPassword": "123456",
-    "confidenScoreConfirm": "80",
-    "timesConfirm": "5",
-    "autoLoadModel": "chuachay"
-}
+{"autoLoadModel": "chuachay", "confidenScoreConfirm": "80", "timesConfirm": "1", "mqttUsername": "internGa", "mqttPassword": "123456", "defaultPublishFeed": "V1"}

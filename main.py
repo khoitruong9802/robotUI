@@ -17,35 +17,30 @@ f = open('setting.json')
  
 # returns JSON object as
 # a dictionary
-data = json.load(f)
-
-setting_value = {
-    "mqttUsername": data["mqttUsername"],
-    "mqttPassword": data["mqttPassword"],
-    "confidenScoreConfirm": data["confidenScoreConfirm"],
-    "timesConfirm": data["timesConfirm"],
-    "autoLoadModel": data["autoLoadModel"]
-}
+setting_value = json.load(f)
 
 ##############
 ### CONFIG ###
 ##############
 
-# CONFIG MQTT
-MQTT_SERVER = "mqtt.ohstem.vn"
-MQTT_PORT = 1883
-MQTT_USERNAME = setting_value["mqttUsername"]
-MQTT_PASSWORD = setting_value["mqttPassword"]
-MQTT_TOPIC_PUB = MQTT_USERNAME + "/feeds/V1"
-MQTT_TOPIC_PUB2 = MQTT_USERNAME + "/feeds/V2"
-MQTT_TOPIC_SUB = MQTT_USERNAME + "/feeds/V3"
+def config():
+    global MQTT_SERVER, MQTT_PORT, MQTT_USERNAME, MQTT_PASSWORD, MQTT_TOPIC_PUB, MQTT_TOPIC_SUB, DEFAULT_IMG, CONFIDENCE_SCORE_CONFIRM, TIMES_CONFIRM
+    # CONFIG MQTT
+    MQTT_SERVER = "mqtt.ohstem.vn"
+    MQTT_PORT = 1883
+    MQTT_USERNAME = setting_value["mqttUsername"]
+    MQTT_PASSWORD = setting_value["mqttPassword"]
+    MQTT_TOPIC_PUB = MQTT_USERNAME + "/feeds/" + setting_value["defaultPublishFeed"]
+    # MQTT_TOPIC_PUB2 = MQTT_USERNAME + "/feeds/V2"
+    MQTT_TOPIC_SUB = MQTT_USERNAME + "/feeds/V3"
 
-# CONFIG DEFAULT IMAGE WHEN THE CAMERA IS NOT OPEN
-DEFAULT_IMG = Image.open("assets/bo.bmp")
+    # CONFIG DEFAULT IMAGE WHEN THE CAMERA IS NOT OPEN
+    DEFAULT_IMG = Image.open("assets/bo.bmp")
 
-CONFIDENCE_SCORE_CONFIRM = np.float64(int(setting_value["confidenScoreConfirm"]))
-TIMES_CONFIRM = int(setting_value["timesConfirm"])
-AREA = 1
+    CONFIDENCE_SCORE_CONFIRM = np.float64(int(setting_value["confidenScoreConfirm"]))
+    TIMES_CONFIRM = int(setting_value["timesConfirm"])
+
+config()
 
 root = tk.Tk()
 root.title("Robot app")
@@ -67,7 +62,7 @@ arr_model_name = []
 arr_class_names = []
 num_of_model_loaded = 0
 model = 0
-class_names = 0
+class_names = 0    
 
 ######################
 ### MODEL FUNCTION ###
@@ -176,17 +171,13 @@ def show_img():
             print("Confidence Score:", str(np.round(confidence_score * 100))[:-2], "%")
             message["text"] = "Class:" + class_name[2:] + " Value:" + str(np.round(confidence_score * 100))[:-2] + "%"
             if send_MQTT_running:
+                print("confirm running ...")
                 if confidence_score * 100 > CONFIDENCE_SCORE_CONFIRM and class_name[2:] == ai_result:
                     count_ai_confirm += 1
                     if count_ai_confirm >= TIMES_CONFIRM:
-                        if AREA == 1:
-                            mqttClient.publish(MQTT_TOPIC_PUB, ai_result, 0, True)
-                            count_ai_confirm = 0
-                        #     AREA = 2
-                        # elif AREA == 2:
-                        #     mqttClient.publish(MQTT_TOPIC_PUB2, ai_result, 0, True)
-                        #     count_ai_confirm = 0
-                        #     AREA = 3
+                        print("#$%^&*()1234 GUI LEN MQTT FEED: " + MQTT_TOPIC_PUB + "#$%^&*()1234")
+                        mqttClient.publish(MQTT_TOPIC_PUB, ai_result, 0, True)
+                        count_ai_confirm = 0
                 else:
                     count_ai_confirm = 0
 
@@ -220,8 +211,9 @@ def start_cam():
 
 # Stop camera
 def stop_cam():
-    global get_image_running, cam
+    global get_image_running, cam, send_MQTT_running
     get_image_running = 0
+    send_MQTT_running = 0
     cam.release()  # type: ignore
     cv2.destroyAllWindows()
 
@@ -258,13 +250,16 @@ mqttClient.on_subscribe = mqtt_subscribed
 #     print(ai_result)
 #     mqttClient.publish(MQTT_TOPIC_PUB, ai_result, 0, True)
 
-def send_to_MQTT():
-    global send_MQTT_running
+def send_to_MQTT(feed):
+    if get_image_running == 0:
+        print("START CAMERA BEFORE SEND")
+        message["text"] = "START CAMERA BEFORE SEND"
+        return
+    global send_MQTT_running, MQTT_TOPIC_PUB
+    MQTT_TOPIC_PUB = MQTT_USERNAME + "/feeds/" + feed
     send_MQTT_running = 1
     print("START SENDING TO MQTT")
     message["text"] = "START SENDING TO MQTT"
-    global AREA
-    AREA = 1
     # MQTT_loop()
 
 
@@ -282,12 +277,27 @@ def close_send_MQTT():
     global send_MQTT_running
     send_MQTT_running = 0
 
+#####################
+### Reset program ###
+#####################
+
+def reset_program():
+    global get_image_running
+    close_send_MQTT()
+    if get_image_running == 1:
+        stop_cam()
+    config()
+
 #################
 ### tkinter #####
 #################
 
 def setting_popup():
     global setting_value
+
+    f = open('setting.json')
+    setting_value = json.load(f)
+
     setting_window = tk.Toplevel(root)
     setting_window.title("Setting")
 
@@ -303,7 +313,18 @@ def setting_popup():
         variable_value = tk.Entry(variable_frame[i], textvariable=var[i], width=15)
         variable_value.pack(side="left", fill="both", padx=(0, 15))
 
-    button_save = ttk.Button(setting_window, text="Save", width=15, command=lambda: print("SAVE"))
+    def change_setting():
+        for i in range(number_of_var):
+            setting_value[setting_key[i]] = var[i].get()
+
+        # Modify json file
+        with open("setting.json", "w") as outfile:
+            json.dump(setting_value, outfile)
+
+        reset_program()
+        setting_window.destroy()
+
+    button_save = ttk.Button(setting_window, text="Save", width=15, command=change_setting)
     button_save.grid(row=number_of_var, column=0, pady=10)
     
 ### Menu bar ###
@@ -409,10 +430,28 @@ button_stop_cam.pack(side="top", fill="both")
 button_MQTT_frame = ttk.Labelframe(button_frame, text="MQTT", padding=5)
 button_MQTT_frame.grid(row=0, column=2)
 
-button_send_to_MQTT = ttk.Button(button_MQTT_frame, text="Send to MQTT", command=send_to_MQTT)
+feed_list = []
+default_feed = setting_value["defaultPublishFeed"]
+for i in range(20):
+    feed_list.append("V" + str(i + 1))
+feed_choose = tk.StringVar()
+option_menu = ttk.OptionMenu(
+    button_MQTT_frame,
+    feed_choose,
+    default_feed,
+    *feed_list,
+)
+option_menu.pack(side="top", fill="both", pady=(0, 10))
+
+button_send_to_MQTT = ttk.Button(button_MQTT_frame, text="Send to MQTT", command=lambda: send_to_MQTT(feed_choose.get()))
 button_send_to_MQTT.pack(side="top", fill="both", pady=(0, 10))
 
-button_close_send_MQTT = ttk.Button(button_MQTT_frame, text="Close send", command=close_send_MQTT)
+button_close_send_MQTT = ttk.Button(
+    button_MQTT_frame, 
+    text="Close send", 
+    bootstyle="danger",  # type: ignore
+    command=close_send_MQTT
+)
 button_close_send_MQTT.pack(side="top", fill="both")
 #####
 
