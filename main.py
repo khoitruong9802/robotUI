@@ -45,7 +45,7 @@ config()
 root = tk.Tk()
 root.title("Robot app")
 root.resizable(False, False)
-root.geometry("450x600+150+150")
+root.geometry("450x620+150+150")
 container = tk.Frame(root)
 container.pack(padx=10, pady=10)
 
@@ -186,6 +186,8 @@ def show_img():
 # Show camera
 def start_cam():
     global get_image_running, cam, num_of_model_loaded
+    if get_image_running == 1:
+        return
     if num_of_model_loaded == 0:
         print("Load model before start camera")
         message["text"] = "Load model before start camera"
@@ -204,12 +206,17 @@ def start_cam():
 # Stop camera
 def stop_cam():
     global get_image_running, cam, send_MQTT_running
+    if get_image_running == 0:
+        return
     get_image_running = 0
-    send_MQTT_running = 0
     cam.release()  # type: ignore
     cv2.destroyAllWindows()
-    print("Stop camera\nStop sending to MQTT")
-    message["text"] = "Stop camera\nStop sending to MQTT"
+    print("Stop camera")
+    message["text"] = "Stop camera"
+    if send_MQTT_running == 1:
+        send_MQTT_running = 0
+        print("Stop sending to MQTT")
+        message["text"] = "Stop camera\nStop sending to MQTT"
 
 
 #####################
@@ -245,11 +252,11 @@ mqttClient.on_subscribe = mqtt_subscribed
 #     mqttClient.publish(MQTT_TOPIC_PUB, ai_result, 0, True)
 
 def send_to_MQTT(feed):
+    global send_MQTT_running, MQTT_TOPIC_PUB
     if get_image_running == 0:
         print("Start camera before send")
         message["text"] = "Start camera before send"
         return
-    global send_MQTT_running, MQTT_TOPIC_PUB
     MQTT_TOPIC_PUB = MQTT_USERNAME + "/feeds/" + feed
     send_MQTT_running = 1
     print("Start sending to MQTT")
@@ -269,6 +276,8 @@ def send_to_MQTT(feed):
 
 def close_send_MQTT():
     global send_MQTT_running
+    if send_MQTT_running == 0:
+        return
     send_MQTT_running = 0
     print("Stop sending to MQTT")
 
