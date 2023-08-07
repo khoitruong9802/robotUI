@@ -45,7 +45,7 @@ config()
 root = tk.Tk()
 root.title("Robot app")
 root.resizable(False, False)
-# root.geometry("600x600+150+150")
+root.geometry("450x600+150+150")
 container = tk.Frame(root)
 container.pack(padx=10, pady=10)
 
@@ -81,17 +81,7 @@ def auto_load_model():
     global model, class_names, num_of_model_loaded
     autoLoadModel = setting_value["autoLoadModel"]
     # Load the model
-    keras_path = "models/" + autoLoadModel + "/keras_Model.h5"
-    class_names_path = "models/" + autoLoadModel + "/labels.txt"
-    model = load_model(keras_path, compile=False)
-    # Load the labels
-    class_names = open(class_names_path, "r").readlines()
-    arr_model.append(model)
-    arr_model_name.append(autoLoadModel)
-    arr_class_names.append(class_names)
-    num_of_model_loaded += 1
-    print("Auto load model " + autoLoadModel + " sucessful")
-    message["text"] = "Auto load model " + autoLoadModel + " sucessful"
+    my_load_model(autoLoadModel)
 
 # Function load model
 def my_load_model(model_choose):
@@ -106,8 +96,8 @@ def my_load_model(model_choose):
             model = arr_model[index]
             class_names = arr_class_names[index]
             num_of_model_loaded += 1
-            print("Load model " + model_name + " sucessful")
-            message["text"] = "Load model " + model_name + " sucessful"
+            print("Load model " + model_name + " sucessfully")
+            message["text"] = "Load model " + model_name + " sucessfully"
             return
 
     # Keras path to load
@@ -132,8 +122,8 @@ def my_load_model(model_choose):
     arr_model_name.append(model_name)
     arr_class_names.append(class_names)
     num_of_model_loaded += 1
-    print("Load model " + model_name + " sucessful")
-    message["text"] = "Load model " + model_name + " sucessful"
+    print("Load model " + model_name + " sucessfully")
+    message["text"] = "Load model " + model_name + " sucessfully"
 
 
 ###################################
@@ -169,7 +159,7 @@ def show_img():
             # Print prediction and confidence score
             print("Class:", class_name[2:], end="")
             print("Confidence Score:", str(np.round(confidence_score * 100))[:-2], "%")
-            message["text"] = "Class:" + class_name[2:] + " Value:" + str(np.round(confidence_score * 100))[:-2] + "%"
+            ai_message["text"] = "Class:" + class_name[2:] + " Value:" + str(np.round(confidence_score * 100))[:-2] + "%"
             if send_MQTT_running:
                 print("confirm running ...")
                 if confidence_score * 100 > CONFIDENCE_SCORE_CONFIRM and class_name[2:] == ai_result:
@@ -206,6 +196,8 @@ def start_cam():
     ##############
     # cam = cv2.VideoCapture("http://192.168.1.56:81/stream")
     cam = cv2.VideoCapture(0)
+    print("Camera is running")
+    message["text"] = "Camera is running"
     show_img()
 
 
@@ -216,6 +208,8 @@ def stop_cam():
     send_MQTT_running = 0
     cam.release()  # type: ignore
     cv2.destroyAllWindows()
+    print("Stop camera\nStop sending to MQTT")
+    message["text"] = "Stop camera\nStop sending to MQTT"
 
 
 #####################
@@ -252,14 +246,14 @@ mqttClient.on_subscribe = mqtt_subscribed
 
 def send_to_MQTT(feed):
     if get_image_running == 0:
-        print("START CAMERA BEFORE SEND")
-        message["text"] = "START CAMERA BEFORE SEND"
+        print("Start camera before send")
+        message["text"] = "Start camera before send"
         return
     global send_MQTT_running, MQTT_TOPIC_PUB
     MQTT_TOPIC_PUB = MQTT_USERNAME + "/feeds/" + feed
     send_MQTT_running = 1
-    print("START SENDING TO MQTT")
-    message["text"] = "START SENDING TO MQTT"
+    print("Start sending to MQTT")
+    message["text"] = "Start sending to MQTT"
     # MQTT_loop()
 
 
@@ -276,6 +270,7 @@ def send_to_MQTT(feed):
 def close_send_MQTT():
     global send_MQTT_running
     send_MQTT_running = 0
+    print("Stop sending to MQTT")
 
 #####################
 ### Reset program ###
@@ -342,45 +337,60 @@ file_menu.add_command(label='Open', command=lambda: print("Open"))
 file_menu.add_command(label='Close', command=lambda: print("Close"))
 # file_menu.add_separator()
 
-# add a submenu
-sub_menu = ttk.Menu(file_menu, tearoff=False)
-sub_menu.add_command(label='Keyboard Shortcuts')
-sub_menu.add_command(label='Color Themes')
+# # add a submenu
+# sub_menu = ttk.Menu(file_menu, tearoff=False)
+# sub_menu.add_command(label='Keyboard Shortcuts')
+# sub_menu.add_command(label='Color Themes')
 
-# add the File menu to the menubar
-file_menu.add_cascade(label="Preferences", menu=sub_menu)
+# # add the File menu to the menubar
+# file_menu.add_cascade(label="Preferences", menu=sub_menu)
 
 # add Exit menu item
 file_menu.add_separator()
 file_menu.add_command(label='Exit', command=root.destroy)
 
 menubar.add_cascade(label="File", menu=file_menu, underline=0)
-# create the Help menu
+# create the Setting menu
 setting_menu = ttk.Menu(menubar, tearoff=False)
 
 setting_menu.add_command(label='Setting', command=setting_popup)
 
-# add the Help menu to the menubar
+# add the Setting menu to the menubar
 menubar.add_cascade(label="Setting", menu=setting_menu, underline=0)
+
+# create the Help menu
+help_menu = ttk.Menu(menubar, tearoff=False)
+
+help_menu.add_command(label='Tutorial', command=setting_popup)
+# add the Help menu to the menubar
+menubar.add_cascade(label="Help", menu=help_menu, underline=0)
 
 ### Main screen ###
 main_screen = ttk.Frame(container)
 main_screen.grid(row=0, column=0, padx=(0, 20))
 
-main_screen_label = ttk.Label(main_screen, text="MAIN SCREEN", font=("Arial", 20))
-main_screen_label.grid(row=0, column=0, pady=(0, 10))
+main_screen_label = ttk.Label(main_screen, text="Ohstem robot GUI", font=("Arial", 18))
+main_screen_label.pack(side="top", pady=(0, 10))
 
 button_frame = tk.Frame(main_screen)
-button_frame.grid(row=1, column=0, pady=(0, 10))
+button_frame.pack(side="top", pady=(0, 10))
 
 cv2_img = DEFAULT_IMG.resize((320, 240))
 cv2_img = ImageTk.PhotoImage(cv2_img)
 label_cv = ttk.Label(main_screen, image=cv2_img)
-label_cv.grid(row=2, column=0, pady=(0, 10))
+label_cv.pack(side="top", pady=(0, 10))
 
 # Show massage
-message = ttk.Label(main_screen, text="Message: ......", font=("Arial", 12))
-message.grid(row=3, column=0)
+message_frame = ttk.Labelframe(main_screen, text="Message", padding=5)
+message_frame.pack(side="top", pady=(0, 10), fill="both")
+message = ttk.Label(message_frame, text="", font=("Arial", 12))
+message.pack()
+
+# Show AI result
+ai_result_frame = ttk.Labelframe(main_screen, text="AI result", padding=5)
+ai_result_frame.pack(side="top", pady=(0, 10), fill="both")
+ai_message = ttk.Label(ai_result_frame, text="", font=("Arial", 12))
+ai_message.pack()
 
 # chuphinh = ttk.Button(main_screen, text="Chup hinh")
 # chuphinh.grid(row=0, column=0)
@@ -469,6 +479,6 @@ button_close_send_MQTT.pack(side="top", fill="both")
 # text.pack()
 #####
 
-# auto_load_model()
+auto_load_model()
 
 root.mainloop()
