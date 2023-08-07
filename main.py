@@ -6,7 +6,7 @@ import tkinter as tk
 import ttkbootstrap as ttk
 from PIL import Image, ImageTk
 import pathlib
-import time
+import datetime
 import json
 
 ############################
@@ -23,29 +23,36 @@ setting_value = json.load(f)
 ### CONFIG ###
 ##############
 
-def config():
-    global MQTT_SERVER, MQTT_PORT, MQTT_USERNAME, MQTT_PASSWORD, MQTT_TOPIC_PUB, MQTT_TOPIC_SUB, DEFAULT_IMG, CONFIDENCE_SCORE_CONFIRM, TIMES_CONFIRM
-    # CONFIG MQTT
-    MQTT_SERVER = "mqtt.ohstem.vn"
-    MQTT_PORT = 1883
+# CONFIG MQTT
+MQTT_SERVER = "mqtt.ohstem.vn"
+MQTT_PORT = 1883
+MQTT_USERNAME = setting_value["mqttUsername"]
+MQTT_PASSWORD = setting_value["mqttPassword"]
+MQTT_TOPIC_PUB = MQTT_USERNAME + "/feeds/" + setting_value["defaultPublishFeed"]
+# MQTT_TOPIC_PUB2 = MQTT_USERNAME + "/feeds/V2"
+MQTT_TOPIC_SUB = MQTT_USERNAME + "/feeds/V3"
+
+# CONFIG DEFAULT IMAGE WHEN THE CAMERA IS NOT OPEN
+DEFAULT_IMG = Image.open("assets/bo.bmp")
+
+CAM_IP = setting_value["camIP"]
+CONFIDENCE_SCORE_CONFIRM = np.float64(int(setting_value["confidenScoreConfirm"]))
+TIMES_CONFIRM = int(setting_value["timesConfirm"])
+
+def change_setting():
+    global MQTT_USERNAME, MQTT_PASSWORD, CONFIDENCE_SCORE_CONFIRM, TIMES_CONFIRM, CAM_IP
     MQTT_USERNAME = setting_value["mqttUsername"]
+    MQTT_user_status["text"] = "MQTT user: " + setting_value["mqttUsername"]
     MQTT_PASSWORD = setting_value["mqttPassword"]
-    MQTT_TOPIC_PUB = MQTT_USERNAME + "/feeds/" + setting_value["defaultPublishFeed"]
-    # MQTT_TOPIC_PUB2 = MQTT_USERNAME + "/feeds/V2"
-    MQTT_TOPIC_SUB = MQTT_USERNAME + "/feeds/V3"
-
-    # CONFIG DEFAULT IMAGE WHEN THE CAMERA IS NOT OPEN
-    DEFAULT_IMG = Image.open("assets/bo.bmp")
-
+    CAM_IP = setting_value["camIP"]
+    cam_IP_status["text"] = "Camera IP: " + setting_value["camIP"]
     CONFIDENCE_SCORE_CONFIRM = np.float64(int(setting_value["confidenScoreConfirm"]))
     TIMES_CONFIRM = int(setting_value["timesConfirm"])
-
-config()
 
 root = tk.Tk()
 root.title("Robot app")
 root.resizable(False, False)
-root.geometry("450x620+150+150")
+root.geometry("600x700+200+50")
 container = tk.Frame(root)
 container.pack(padx=10, pady=10)
 
@@ -56,6 +63,7 @@ cam = 0
 ai_result = 0
 count_ai = 0
 count_ai_confirm = 0
+take_photo_flag = 0
 
 arr_model = []
 arr_model_name = []
@@ -73,8 +81,6 @@ model_list = []
 get_model = pathlib.Path("models")
 for item in get_model.iterdir():
     model_list.append(str(item)[7:])
-
-
 
 # Auto load model bienbao when program start
 def auto_load_model():
@@ -98,6 +104,7 @@ def my_load_model(model_choose):
             num_of_model_loaded += 1
             print("Load model " + model_name + " sucessfully")
             message["text"] = "Load model " + model_name + " sucessfully"
+            model_status["text"] = "Model: " + model_name
             return
 
     # Keras path to load
@@ -113,6 +120,7 @@ def my_load_model(model_choose):
         print("The path does not exist! Check your path!!\nLoad model fail")
         message["text"] = "The path does not exist! Check your path!!\nLoad model fail"
         return
+    
     # Reload the model
     model = load_model(keras_path, compile=False)
     # Reload the labels
@@ -124,7 +132,7 @@ def my_load_model(model_choose):
     num_of_model_loaded += 1
     print("Load model " + model_name + " sucessfully")
     message["text"] = "Load model " + model_name + " sucessfully"
-
+    model_status["text"] = "Model: " + model_name
 
 ###################################
 ### CAMERA AND PREDICT FUNCTION ###
@@ -132,8 +140,13 @@ def my_load_model(model_choose):
 
 # Update frame and prediction
 def show_img():
-    global cam, ai_result, count_ai, count_ai_confirm, AREA
+    global cam, ai_result, count_ai, count_ai_confirm, take_photo_flag
     ret, frame = cam.read()  # type: ignore
+    if take_photo_flag == 1:
+        now = datetime.datetime.now().strftime("%Hh%Mm%Ss%B-%d-%Y")
+        cv2.imwrite("photo/" + now + ".png", frame)
+        message["text"] = "Your photo is saved in photo folder"
+        take_photo_flag = 0
     cv2_img = DEFAULT_IMG
     if get_image_running:
         cv2_img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
@@ -174,7 +187,7 @@ def show_img():
             ai_result = class_name[2:]
             count_ai = 0
 
-    cv2_img = cv2_img.resize((320, 240))
+    cv2_img = cv2_img.resize((430, 320))
     cv2_img = ImageTk.PhotoImage(cv2_img)
     label_cv.config(image=cv2_img)
     label_cv.image = cv2_img  # type: ignore #VERY IMPORTANT
@@ -196,10 +209,18 @@ def start_cam():
     ##############
     ### CAM IP ###
     ##############
-    # cam = cv2.VideoCapture("http://192.168.1.56:81/stream")
-    cam = cv2.VideoCapture(0)
+    if CAM_IP == "0":
+        cam = cv2.VideoCapture(0)
+    else:
+        # http://192.168.137.101:4747/video
+        cam = cv2.VideoCapture("http://" + CAM_IP + ":81/stream")
+    if not cam.isOpened():
+        print("Fail to start camera. Check your camera IP")
+        message["text"] = "Fail to start camera. Check your camera IP"
+        return
     print("Camera is running")
     message["text"] = "Camera is running"
+    camera_status["text"] = "Camera: ON"
     show_img()
 
 
@@ -213,11 +234,22 @@ def stop_cam():
     cv2.destroyAllWindows()
     print("Stop camera")
     message["text"] = "Stop camera"
+    camera_status["text"] = "Camera: OFF"
+
     if send_MQTT_running == 1:
         send_MQTT_running = 0
         print("Stop sending to MQTT")
         message["text"] = "Stop camera\nStop sending to MQTT"
+        MQTT_status["text"] = "MQTT: OFF"
 
+
+def take_photo():
+    global take_photo_flag
+    if get_image_running == 0:
+        print("Start camera to take photo")
+        message["text"] = "Start camera to take photo"
+        return
+    take_photo_flag = 1
 
 #####################
 ### MQTT FUNCTION ###
@@ -258,9 +290,11 @@ def send_to_MQTT(feed):
         message["text"] = "Start camera before send"
         return
     MQTT_TOPIC_PUB = MQTT_USERNAME + "/feeds/" + feed
+    feed_status["text"] = "Feed: " + feed
     send_MQTT_running = 1
-    print("Start sending to MQTT")
-    message["text"] = "Start sending to MQTT"
+    print("Start sending to MQTT (Feed " + feed + ")")
+    message["text"] = "Start sending to MQTT (Feed " + feed + ")"
+    MQTT_status["text"] = "MQTT: ON"
     # MQTT_loop()
 
 
@@ -280,6 +314,8 @@ def close_send_MQTT():
         return
     send_MQTT_running = 0
     print("Stop sending to MQTT")
+    message["text"] = "Stop sending to MQTT"
+    MQTT_status["text"] = "MQTT: OFF"
 
 #####################
 ### Reset program ###
@@ -288,9 +324,9 @@ def close_send_MQTT():
 def reset_program():
     global get_image_running
     close_send_MQTT()
-    if get_image_running == 1:
-        stop_cam()
-    config()
+    stop_cam()
+    change_setting()
+    message["text"] = "Settings saved successfully"
 
 #################
 ### tkinter #####
@@ -362,7 +398,7 @@ menubar.add_cascade(label="File", menu=file_menu, underline=0)
 # create the Setting menu
 setting_menu = ttk.Menu(menubar, tearoff=False)
 
-setting_menu.add_command(label='Setting', command=setting_popup)
+setting_menu.add_command(label='Setting value', command=setting_popup)
 
 # add the Setting menu to the menubar
 menubar.add_cascade(label="Setting", menu=setting_menu, underline=0)
@@ -376,15 +412,16 @@ menubar.add_cascade(label="Help", menu=help_menu, underline=0)
 
 ### Main screen ###
 main_screen = ttk.Frame(container)
-main_screen.grid(row=0, column=0, padx=(0, 20))
+main_screen.grid(row=0, column=0)
 
-main_screen_label = ttk.Label(main_screen, text="Ohstem robot GUI", font=("Arial", 18))
+main_screen_label = ttk.Label(main_screen, text="Ohstem robot GUI", font=("Arial", 16))
 main_screen_label.pack(side="top", pady=(0, 10))
 
 button_frame = tk.Frame(main_screen)
 button_frame.pack(side="top", pady=(0, 10))
 
-cv2_img = DEFAULT_IMG.resize((320, 240))
+# 320 240
+cv2_img = DEFAULT_IMG.resize((430, 320))
 cv2_img = ImageTk.PhotoImage(cv2_img)
 label_cv = ttk.Label(main_screen, image=cv2_img)
 label_cv.pack(side="top", pady=(0, 10))
@@ -417,11 +454,11 @@ option_menu = ttk.OptionMenu(
     *model_list,
     bootstyle="secondary"  # type: ignore
 )
-option_menu.pack(side="top", fill="both", pady=(0, 10))
+option_menu.pack(side="top", fill="both", pady=(0, 10), ipady=2)
 
 # Button to load model
-button_load_model = ttk.Button(button_model_frame, text="Load Model", command=lambda: my_load_model(model_choose.get()))
-button_load_model.pack(side="top", fill="both")
+button_select_model = ttk.Button(button_model_frame, text="Select Model", command=lambda: my_load_model(model_choose.get()))
+button_select_model.pack(side="top", fill="both", ipady=2)
 #####
 
 ### Camera button ###
@@ -434,7 +471,7 @@ button_start_cam = ttk.Button(
     bootstyle="success",  # type: ignore
     command=start_cam
 )
-button_start_cam.pack(side="top", fill="both", pady=(0, 10))
+button_start_cam.pack(side="top", fill="both", pady=(0, 10), ipady=2)
 
 button_stop_cam = ttk.Button(
     button_cam_frame,
@@ -442,12 +479,21 @@ button_stop_cam = ttk.Button(
     bootstyle="danger",  # type: ignore
     command=stop_cam
 )
-button_stop_cam.pack(side="top", fill="both")
+button_stop_cam.pack(side="top", fill="both", pady=(0, 10), ipady=2)
+
+button_take_photo = ttk.Button(
+    button_cam_frame,
+    text="Take photo",
+    bootstyle="warning",  # type: ignore
+    command=take_photo
+)
+button_take_photo.pack(side="top", fill="both", ipady=2)
+
 #####
 
 ### MQTT button ###
 button_MQTT_frame = ttk.Labelframe(button_frame, text="MQTT", padding=5)
-button_MQTT_frame.grid(row=0, column=2)
+button_MQTT_frame.grid(row=0, column=2, padx=(0, 10))
 
 feed_list = []
 default_feed = setting_value["defaultPublishFeed"]
@@ -460,10 +506,10 @@ option_menu = ttk.OptionMenu(
     default_feed,
     *feed_list,
 )
-option_menu.pack(side="top", fill="both", pady=(0, 10))
+option_menu.pack(side="top", fill="both", pady=(0, 10), ipady=2)
 
 button_send_to_MQTT = ttk.Button(button_MQTT_frame, text="Send to MQTT", command=lambda: send_to_MQTT(feed_choose.get()))
-button_send_to_MQTT.pack(side="top", fill="both", pady=(0, 10))
+button_send_to_MQTT.pack(side="top", fill="both", pady=(0, 10), ipady=2)
 
 button_close_send_MQTT = ttk.Button(
     button_MQTT_frame, 
@@ -471,21 +517,30 @@ button_close_send_MQTT = ttk.Button(
     bootstyle="danger",  # type: ignore
     command=close_send_MQTT
 )
-button_close_send_MQTT.pack(side="top", fill="both")
+button_close_send_MQTT.pack(side="top", fill="both", ipady=2)
 #####
 
-### Terminal screen ###
-# terminal_screen = tk.Frame(container)
-# terminal_screen.grid(row=0, column=1)
+### Status screen ###
+status_screen = ttk.Labelframe(button_frame, text="Status", padding=5)
+status_screen.grid(row=0, column=3)
 
-# terminal_screen_label = ttk.Label(terminal_screen, text="TERMINAL" , font=("Arial", 20))
-# terminal_screen_label.grid(row=0, column=0, pady=(0, 10))
+model_status = ttk.Label(status_screen, text="Model: " + setting_value["autoLoadModel"], font=("Arial", 10))
+model_status.pack(side="top", fill="both")
 
-# terminal_screen_text = ttk.Frame(terminal_screen)
-# terminal_screen_text.grid(row=1, column=0, pady=(0, 10))
+cam_IP_status = ttk.Label(status_screen, text="Camera IP: " + setting_value["camIP"], font=("Arial", 10))
+cam_IP_status.pack(side="top", fill="both")
 
-# text = ttk.LabelFrame(terminal_screen_text, text="Output")
-# text.pack()
+camera_status = ttk.Label(status_screen, text="Camera: OFF", font=("Arial", 10))
+camera_status.pack(side="top", fill="both")
+
+MQTT_user_status = ttk.Label(status_screen, text="MQTT user: " + setting_value["mqttUsername"], font=("Arial", 10))
+MQTT_user_status.pack(side="top", fill="both")
+
+feed_status = ttk.Label(status_screen, text="Feed: " + setting_value["defaultPublishFeed"], font=("Arial", 10))
+feed_status.pack(side="top", fill="both")
+
+MQTT_status = ttk.Label(status_screen, text="MQTT: OFF", font=("Arial", 10))
+MQTT_status.pack(side="top", fill="both") 
 #####
 
 auto_load_model()
