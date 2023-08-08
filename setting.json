@@ -1,9 +1,1 @@
-{
-    "camIP": "0",
-    "autoLoadModel": "nguoi",
-    "confidenScoreConfirm": "80",
-    "timesConfirm": "1",
-    "mqttUsername": "khoitruong9802",
-    "mqttPassword": "123456",
-    "defaultPublishFeed": "V1"
-}
+{"camIP": "0", "autoLoadModel": "chuachay", "confidenScoreConfirm": "80", "timesConfirm": "3", "mqttUsername": "khoitruong9802", "mqttPassword": "123456", "defaultPublishFeed": "V1"}
